@@ -1,0 +1,6 @@
+# SigLIP 2 base, patch16, 224px (default; 768-dim, 196 patch tokens).
+# Fixed-resolution SigLIP 2 checkpoints are backward compatible with the
+# SigLIP v1 architecture and take standard (B,3,224,224) pixel_values.
+model_name: google/siglip2-base-patch16-224
+image_size: 224
+freeze: true          # frozen backbone (paper default)

@@ -1,0 +1,4 @@
+# Forgery Style Mixture (train-only; disabled at val/inference).
+enabled: true
+prob: 0.5                     # activation probability (MixStyle-style)
+alpha: 0.1                    # Beta(alpha, alpha) mixing prior (Eqs. 7-8)

@@ -1,0 +1,4 @@
+# SigLIP 2 large, patch16, 256px (heavier; closer to the paper's CLIP ViT-L).
+model_name: google/siglip2-large-patch16-256
+image_size: 256
+freeze: true

@@ -1,0 +1,33 @@
+# FaceForensics++-style data. Pre-extract/crop frames into per-split folders:
+#   <root>/<train|val|test>/{real,Deepfakes,Face2Face,FaceSwap,NeuralTextures}/**.png
+source: faceforensics        # "faceforensics" (folder) or "manifest" (CSV)
+root: data/ffpp_frames       # output of scripts/preprocess_ffpp.py
+manifest: null               # CSV path when source=manifest
+image_size: ${backbone.image_size}
+batch_size: 48               # paper Sec. IV-A
+num_workers: 8
+real_oversample: 4           # 4x real faces for class balance (paper Sec. IV-B)
+use_face_crop: false         # frames assumed pre-cropped; enable if raw
+face_backend: opencv         # opencv | retinaface | dlib
+face_margin: 1.3             # box enlargement factor (paper Sec. IV-A)
+domain_map: null             # optional {subfolder: domain_id} override
+# Advanced, forgery-aware augmentation. DISABLED by default to match the paper
+# ("OSDFD does not employ data augmentations during training"). Set
+# augmentation.enabled=true to turn the whole pipeline on. Only affects the
+# training split; val/test always use plain resize + normalise.
+augmentation:
+  enabled: false
+  hflip: 0.5                 # prob. of horizontal flip
+  color_jitter: 0.4         # brightness/contrast/saturation strength (0 = off)
+  hue: 0.1                  # hue jitter strength
+  random_resized_crop: false
+  rrc_scale: [0.8, 1.0]     # area scale range for RandomResizedCrop
+  gaussian_blur: 0.3        # prob. of Gaussian blur
+  blur_sigma: [0.1, 2.0]
+  jpeg: 0.3                 # prob. of random JPEG recompression (compression artefacts)
+  jpeg_quality: [40, 90]
+  downscale: 0.2            # prob. of random down+up scaling
+  downscale_range: [0.25, 0.75]
+  random_erasing: 0.2       # prob. of random erasing / cutout
+pin_memory: true
+persistent_workers: true
