@@ -1,8 +1,9 @@
 # Core deep learning stack
-# Install PyTorch matching your CUDA (see README). Example for CUDA 12.1:
-#   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
-torch==2.5.1
-torchvision==0.20.1
+# Install PyTorch matching your CUDA (see README). Blackwell GPUs (B200, sm_100)
+# need torch>=2.7.0 built against CUDA 12.8:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch>=2.7.0
+torchvision>=0.22.0
 
 # PyTorch Lightning 2.x (imported as `lightning`)
 lightning==2.4.0
@@ -27,6 +28,7 @@ opencv-python-headless>=4.9.0
 pandas>=2.0.0
 scikit-learn>=1.4.0
 matplotlib>=3.8.0
+tqdm>=4.66.0
 
 # Face detection for scripts/preprocess_ffpp.py (MTCNN)
 facenet-pytorch>=2.5.3

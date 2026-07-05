@@ -36,6 +36,7 @@ import numpy as np
 import torch
 from facenet_pytorch import MTCNN
 from PIL import Image
+from tqdm import tqdm
 
 # Output subfolder -> forgery source-domain id (must match src/data/dataset.py).
 DOMAINS = {
@@ -186,7 +187,9 @@ def main() -> None:
         videos = sorted(p for p in os.listdir(cls_dir) if p.endswith(".mp4"))
         # Group by split, then optionally limit per (split, class) for dry runs.
         seen_per_split: dict[str, int] = {"train": 0, "val": 0, "test": 0}
-        for vid in videos:
+        saved_in_class = 0
+        pbar = tqdm(videos, desc=cls_name, unit="video")
+        for vid in pbar:
             stem = Path(vid).stem
             split = video_split(stem, id_to_split)
             if split is None:  # e.g. DeepFakeDetection actor ids
@@ -200,7 +203,9 @@ def main() -> None:
                 frames_per_split[split], args.margin, args.image_size,
             )
             grand_total += n
+            saved_in_class += n
             per_split_counts[split] += n
+            pbar.set_postfix(split=split, crops=saved_in_class)
         print(f"[{cls_name}] processed "
               f"{ {s: seen_per_split[s] for s in seen_per_split} } videos")
 

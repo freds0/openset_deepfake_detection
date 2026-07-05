@@ -5,7 +5,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 DATASET_ID = "bitmind/FaceForensicsC23"
-OUTPUT_DIR = Path("data/FaceForensicsC23")
+OUTPUT_DIR = Path("data/FaceForensics++_C23")
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
