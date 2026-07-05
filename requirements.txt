@@ -28,6 +28,9 @@ pandas>=2.0.0
 scikit-learn>=1.4.0
 matplotlib>=3.8.0
 
+# Face detection for scripts/preprocess_ffpp.py (MTCNN)
+facenet-pytorch>=2.5.3
+
 # Optional face detectors (uncomment the one you use)
 # dlib>=19.24.0
 # retina-face>=0.0.17

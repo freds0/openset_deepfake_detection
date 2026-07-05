@@ -1,3 +1,8 @@
+# Datasets: keep only the small FF++ split protocol JSONs, ignore raw/
+# generated dataset content (videos, extracted frames, downloaded shards).
+data/*
+!data/ffpp_splits/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
