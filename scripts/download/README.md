@@ -18,7 +18,12 @@ python scripts/download/download_ntire_val_dataset.py # -> data/NTIRE-RobustAIGe
 | `download_ntire_dataset.py` | `deepfakesMSU/NTIRE-RobustAIGenDetection-train` | `data/NTIRE-RobustAIGenDetection-train` |
 | `download_ntire_val_dataset.py` | `deepfakesMSU/NTIRE-RobustAIGenDetection-val` | `data/NTIRE-RobustAIGenDetection-val` |
 
-The NTIRE test split is not released yet (TBD by the challenge organizers).
+The NTIRE `-val` dataset has no trustworthy ground-truth labels at this stage
+of the challenge (its `val_labels.csv`/`val_hard_labels.csv` are not confirmed
+real per the dataset card) and its test split is not released yet (TBD).
+`scripts/preprocess_ntire.py` therefore carves train/val/test out of the
+labeled `-train` set only; use `-val` later for unlabeled challenge-submission
+inference (see `predict.py`).
 
 After downloading FaceForensics++ videos, convert them into training-ready face
 crops with `scripts/preprocess_ffpp.py` (see the main README).
