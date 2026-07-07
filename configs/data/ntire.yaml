@@ -1,0 +1,33 @@
+# NTIRE RobustAIGenDetection manifest: binary real/fake, no per-generator domain.
+#   shard_N/{images,labels.csv} -> scripts/preprocess_ntire.py -> manifest CSV
+source: manifest             # "faceforensics" (folder) or "manifest" (CSV)
+root: null                   # unused in manifest mode
+manifest: data/ntire_manifest.csv   # output of scripts/preprocess_ntire.py
+image_size: ${backbone.image_size}
+batch_size: 48
+num_workers: 8
+real_oversample: 2           # pooled ratio is ~36% real / 64% fake (vs. FF++'s need for 4x)
+use_face_crop: false         # enable + pick a backend if NTIRE images aren't pre-cropped faces
+face_backend: opencv         # opencv | retinaface | dlib
+face_margin: 1.3
+domain_map: null             # unused in manifest mode (domain comes from the CSV)
+# Advanced, forgery-aware augmentation. DISABLED by default to match the paper
+# ("OSDFD does not employ data augmentations during training"). Set
+# augmentation.enabled=true to turn the whole pipeline on. Only affects the
+# training split; val/test always use plain resize + normalise.
+augmentation:
+  enabled: false
+  hflip: 0.5
+  color_jitter: 0.4
+  hue: 0.1
+  random_resized_crop: false
+  rrc_scale: [0.8, 1.0]
+  gaussian_blur: 0.3
+  blur_sigma: [0.1, 2.0]
+  jpeg: 0.3
+  jpeg_quality: [40, 90]
+  downscale: 0.2
+  downscale_range: [0.25, 0.75]
+  random_erasing: 0.2
+pin_memory: true
+persistent_workers: true
