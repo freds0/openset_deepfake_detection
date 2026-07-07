@@ -61,7 +61,7 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
     split = pd.Series("train", index=manifest.index)
     for label in manifest["label"].unique():
-        idx = manifest.index[manifest["label"] == label].to_numpy()
+        idx = manifest.index[manifest["label"] == label].to_numpy().copy()
         rng.shuffle(idx)
         n_val = int(len(idx) * args.val_frac)
         n_test = int(len(idx) * args.test_frac)
