@@ -161,6 +161,46 @@ assumed pre-cropped); enable with `data.use_face_crop=true data.face_backend=ope
 
 ---
 
+## Data preprocessing (NTIRE → manifest CSV)
+
+The NTIRE 2026 Robust AI-Generated Image Detection dataset ships as 6 shards
+(~277k images total, downloaded by `scripts/download/download_ntire_dataset.py`):
+
+```
+<root>/
+  shard_0/
+    images/<image_name>.jpg
+    labels.csv            # (index), image_name, label (0 = real, 1 = fake)
+  shard_1/ ... shard_5/
+```
+
+Build the `path,label,domain,split` manifest CSV that `configs/data/ntire.yaml`
+expects (`source: manifest`) with:
+
+```bash
+conda activate open_set_deepfake
+python scripts/preprocess_ntire.py \
+  --data-root data/NTIRE-RobustAIGenDetection-train \
+  --out data/ntire_manifest.csv
+```
+
+`--data-root` can point anywhere the shards already live, including a dataset
+downloaded for another project on the same machine — the manifest stores
+absolute image paths, so nothing needs to be copied into this repo. The split
+is a stratified random split (by label) carved out of the labeled train pool,
+since NTIRE's `-val` dataset has no trustworthy ground truth yet (see
+`scripts/download/README.md`).
+
+NTIRE has no per-generator domain info (`domain` == `label`, a single fake
+domain), so **FSM has nothing to mix between domains and should be disabled**
+when training on it:
+
+```bash
+./scripts/train.sh data=ntire fsm.enabled=false
+```
+
+---
+
 ## Training
 
 ```bash
@@ -176,12 +216,16 @@ python train.py logger.wandb.offline=true                       # offline W&B
 ```
 
 Defaults follow the paper (Sec. IV-A): Adam (`β=0.9/0.999`), `lr=3e-5`, no LR
-decay, batch size 48, 30k steps, AUC as the validation metric, AMP on. Training
-supports DDP, gradient accumulation/clipping, deterministic mode, resume
-(`ckpt_path=...`), early stopping, checkpointing and LR scheduling — all via
-config. Both **TensorBoard and W&B** log simultaneously (losses, AUC/ACC/F1/AP/
-EER, LR, GPU memory, epoch time, ROC/PR/confusion figures, config); the best
-checkpoint is uploaded as a W&B artifact.
+decay, batch size 48, 30k steps, AUC as the validation metric, AMP on (`bf16-mixed`
+by default; cuDNN benchmark on, `deterministic=warn`). Training supports DDP,
+gradient accumulation/clipping, deterministic mode, resume (`ckpt_path=...`),
+early stopping, checkpointing and LR scheduling — all via config. Both
+**TensorBoard and W&B** log simultaneously (losses, AUC/ACC/F1/AP/EER, LR, GPU
+memory, epoch time, ROC/PR/confusion figures, config); the best checkpoint is
+uploaded as a W&B artifact.
+
+For bit-exact reproducibility (slower), disable the performance-oriented
+defaults: `trainer.precision=32-true deterministic=true trainer.benchmark=false`.
 
 ### Data augmentation (advanced, disabled by default)
 

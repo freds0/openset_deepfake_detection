@@ -13,6 +13,7 @@ classification head are optimised.
 from __future__ import annotations
 
 import hydra
+import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf, open_dict
 
@@ -24,6 +25,7 @@ from src.utils.seed import seed_everything
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig) -> None:
+    torch.set_float32_matmul_precision("high")  # TF32 in fp32 matmuls (Ampere+/B200)
     # Bake the concrete Hydra run directory into the config so checkpoints do
     # not store an unresolvable `${hydra:...}` interpolation.
     with open_dict(cfg):
@@ -33,6 +35,16 @@ def main(cfg: DictConfig) -> None:
 
     datamodule = ForgeryDataModule(**OmegaConf.to_container(cfg.data, resolve=True))
     model = OSDFDLightningModule(cfg)
+    if cfg.trainer.compile:
+        # KNOWN ISSUE: as observed with torch 2.7 / inductor, this currently
+        # raises `BackendCompilerFailed` ('float' object has no attribute
+        # 'meta') because FSM (Sec. III-C) has data-dependent control flow --
+        # `torch.rand(1).item()`, boolean-mask indexing, `Beta.sample()` --
+        # that graph-breaks/fails to trace. Compiling only the (static-shape,
+        # frozen) backbone instead of the full model would likely be needed
+        # to get any benefit; treat `trainer.compile=true` as unsupported
+        # until that follow-up lands.
+        model.model = torch.compile(model.model)
 
     loggers = build_loggers(cfg)
     callbacks = build_callbacks(cfg)

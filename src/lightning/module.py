@@ -14,7 +14,13 @@ import time
 import lightning as L
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf, open_dict
+from torchmetrics.classification import (
+    BinaryAccuracy,
+    BinaryAUROC,
+    BinaryAveragePrecision,
+    BinaryF1Score,
+)
 
 from ..losses.combined import OSDFDLoss
 from ..models.osdfd import OSDFDModel
@@ -48,15 +54,20 @@ def build_model(cfg: DictConfig) -> OSDFDModel:
     )
     return OSDFDModel(
         model_name=cfg.backbone.model_name,
+        pretrained=cfg.backbone.get("pretrained", True),
+        attn_implementation=cfg.backbone.get("attn_implementation", None),
         lora=lora,
         cdc=cdc,
+        peft_start_layer=cfg.peft.get("start_layer", 0),
         fsm_prob=cfg.fsm.prob if cfg.fsm.enabled else 0.0,
         fsm_alpha=cfg.fsm.alpha,
+        fsm_single_domain_fallback=cfg.fsm.get("single_domain_fallback", "random"),
         feature_fusion=cfg.model.feature_fusion,
         head_hidden_dim=cfg.model.head_hidden_dim,
         head_dropout=cfg.model.head_dropout,
         freeze_backbone=cfg.backbone.freeze,
         train_norm=cfg.model.train_norm,
+        train_pool_head=cfg.model.get("train_pool_head", False),
     )
 
 
@@ -72,6 +83,7 @@ class OSDFDLightningModule(L.LightningModule):
         self.loss_fn = OSDFDLoss(
             scl_weight=cfg.loss.scl_weight,
             scl_margin=cfg.loss.scl_margin,
+            scl_margin_scale=cfg.loss.get("scl_margin_scale", "none"),
             pos_weight=cfg.loss.pos_weight,
         )
 
@@ -81,6 +93,51 @@ class OSDFDLightningModule(L.LightningModule):
         self._test_scores: list[np.ndarray] = []
         self._test_labels: list[np.ndarray] = []
         self._epoch_start = 0.0
+
+        # DDP-correct validation metrics (sync'd via torchmetrics, unlike the
+        # numpy/all_gather path below which double-counts DistributedSampler
+        # padding). val/eer, val/fpr, val/fnr and threshold calibration still
+        # go through the numpy path -- torchmetrics has no EER metric.
+        self.val_auc = BinaryAUROC()
+        self.val_ap = BinaryAveragePrecision()
+        self.val_acc = BinaryAccuracy()
+        self.val_f1 = BinaryF1Score()
+
+        # EER-based decision threshold, calibrated on the validation split
+        # after every validation epoch and persisted in the checkpoint.
+        self.calibrated_threshold: float = 0.5
+
+    @classmethod
+    def load_for_inference(
+        cls, ckpt_path: str, map_location: str | torch.device | None = None
+    ) -> "OSDFDLightningModule":
+        """Load a checkpoint for inference without downloading pretrained weights.
+
+        The default ``load_from_checkpoint`` rebuilds the model with
+        ``backbone.pretrained=True`` (from the saved hparams) before
+        overwriting it with the checkpoint's own ``state_dict`` -- requiring
+        a HuggingFace Hub download (and network access) just to be discarded.
+        This instead reconstructs the backbone architecture from its config
+        only (see :class:`~src.models.backbone.Siglip2Backbone`) and lets the
+        checkpoint's weights populate it, so inference works fully offline.
+
+        Built by hand rather than via ``load_from_checkpoint(..., cfg=cfg)``:
+        the checkpoint's ``hyper_parameters`` is the *flattened* cfg content
+        (``save_hyperparameters(cfg)`` with a single DictConfig positional arg
+        stores its keys directly, not nested under a ``"cfg"`` key), so
+        Lightning's own kwarg-override merge (``hparams.update({"cfg": cfg})``)
+        raises ``ConfigKeyError`` on this struct config.
+        """
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        cfg = OmegaConf.create(ckpt["hyper_parameters"])
+        with open_dict(cfg):
+            cfg.backbone.pretrained = False
+        model = cls(cfg)
+        model.load_state_dict(ckpt["state_dict"])
+        model.on_load_checkpoint(ckpt)  # restores calibrated_threshold (item 1.3)
+        if map_location is not None:
+            model.to(map_location)
+        return model
 
     # ------------------------------------------------------------------ core
     def forward(self, pixel_values: torch.Tensor) -> torch.Tensor:
@@ -116,6 +173,7 @@ class OSDFDLightningModule(L.LightningModule):
         self.log("train/loss", parts["total"], prog_bar=True, batch_size=bs)
         self.log("train/bce", parts["bce"], batch_size=bs)
         self.log("train/scl", parts["scl"], batch_size=bs)
+        self.log("train/fsm_fired", float(self.model.fsm.last_fired), batch_size=bs)
         self.log("lr", self.optimizers().param_groups[0]["lr"], prog_bar=True, batch_size=bs)
         return loss
 
@@ -126,19 +184,32 @@ class OSDFDLightningModule(L.LightningModule):
             torch.cuda.reset_peak_memory_stats()
 
     # ------------------------------------------------------------- evaluation
-    def _eval_step(self, batch: dict, scores: list, labels: list) -> torch.Tensor:
+    def _eval_step(self, batch: dict, scores: list, labels: list) -> tuple[torch.Tensor, torch.Tensor]:
         out = self.model(batch["pixel_values"], apply_fsm=False)
         loss, parts = self.loss_fn(out.logits, out.scl_features, batch["label"])
-        scores.append(torch.sigmoid(out.logits).detach().float().cpu().numpy())
+        probs = torch.sigmoid(out.logits)
+        scores.append(probs.detach().float().cpu().numpy())
         labels.append(batch["label"].detach().cpu().numpy())
-        return parts["total"]
+        return parts["total"], probs
 
     def validation_step(self, batch: dict, batch_idx: int) -> None:
-        loss = self._eval_step(batch, self._val_scores, self._val_labels)
-        self.log("val/loss", loss, prog_bar=True, batch_size=batch["label"].size(0))
+        loss, probs = self._eval_step(batch, self._val_scores, self._val_labels)
+        labels = batch["label"]
+        self.val_auc.update(probs, labels)
+        self.val_ap.update(probs, labels)
+        self.val_acc.update(probs, labels)
+        self.val_f1.update(probs, labels)
+        self.log("val/loss", loss, prog_bar=True, batch_size=labels.size(0))
 
     def on_validation_epoch_end(self) -> None:
-        self._finalise_eval(self._val_scores, self._val_labels, "val")
+        # DDP-correct (no padding bias): Lightning syncs + computes + resets.
+        self.log("val/auc", self.val_auc, prog_bar=True)
+        self.log("val/ap", self.val_ap)
+        self.log("val/acc", self.val_acc)
+        self.log("val/f1", self.val_f1)
+        self._finalise_eval(
+            self._val_scores, self._val_labels, "val", skip_metrics={"auc", "ap", "acc", "f1"}
+        )
         self._val_scores.clear()
         self._val_labels.clear()
 
@@ -150,14 +221,24 @@ class OSDFDLightningModule(L.LightningModule):
         self._test_scores.clear()
         self._test_labels.clear()
 
-    def _finalise_eval(self, scores: list, labels: list, prefix: str, figures: bool = False) -> None:
+    def _finalise_eval(
+        self,
+        scores: list,
+        labels: list,
+        prefix: str,
+        figures: bool = False,
+        skip_metrics: set[str] | None = None,
+    ) -> None:
         if not scores:
             return
         y_score = np.concatenate(scores)
         y_true = np.concatenate(labels)
         # Under DDP each rank only sees its shard; gather all predictions so
-        # AUC/EER are computed over the full split (DistributedSampler pads
-        # ranks to equal length, so all_gather shapes match).
+        # EER/FPR/FNR are computed over the full split. This all_gather path
+        # double-counts DistributedSampler's padding, which is why the
+        # primary val metrics (auc/ap/acc/f1) are logged via torchmetrics
+        # instead (see on_validation_epoch_end) -- acceptable bias only for
+        # the secondary metrics still computed here.
         if self.trainer is not None and self.trainer.world_size > 1:
             y_score = self.all_gather(
                 torch.from_numpy(y_score).to(self.device)
@@ -166,16 +247,24 @@ class OSDFDLightningModule(L.LightningModule):
                 torch.from_numpy(y_true).to(self.device)
             ).flatten().cpu().numpy()
         metrics = compute_metrics(y_true, y_score)
-        # AUC is the primary validation metric (paper Sec. IV-A).
+        skip = skip_metrics or set()
         self.log_dict(
-            {f"{prefix}/{k}": v for k, v in metrics.items()},
+            {f"{prefix}/{k}": v for k, v in metrics.items() if k not in skip},
             prog_bar=(prefix == "val"),
         )
+        if prefix == "val" and np.isfinite(metrics.get("eer_threshold", float("nan"))):
+            self.calibrated_threshold = float(metrics["eer_threshold"])
         if figures:
             # `self.logger` only returns the first logger; send the figures to
             # every attached logger (TensorBoard *and* W&B).
             for logger in self.loggers:
                 log_figures(logger, y_true, y_score, self.global_step, prefix)
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        checkpoint["calibrated_threshold"] = self.calibrated_threshold
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        self.calibrated_threshold = checkpoint.get("calibrated_threshold", 0.5)
 
     # -------------------------------------------------------------- inference
     def predict_step(self, batch: dict, batch_idx: int, dataloader_idx: int = 0) -> dict:
@@ -183,9 +272,11 @@ class OSDFDLightningModule(L.LightningModule):
         probs = torch.sigmoid(out.logits)
         result = {
             "path": batch.get("path"),
-            "logit": out.logits.detach().cpu(),
-            "prob": probs.detach().cpu(),
-            "pred": (probs >= 0.5).long().detach().cpu(),
+            # .float(): under AMP (bf16-mixed), logits/probs are bfloat16,
+            # which numpy has no dtype for -- test.py calls .numpy() on these.
+            "logit": out.logits.detach().float().cpu(),
+            "prob": probs.detach().float().cpu(),
+            "pred": (probs >= self.calibrated_threshold).long().detach().cpu(),
         }
         if "label" in batch:
             result["label"] = batch["label"].detach().cpu()
@@ -195,11 +286,16 @@ class OSDFDLightningModule(L.LightningModule):
     def configure_optimizers(self):
         oc = self.cfg.optimizer
         params = list(self.model.trainable_parameters())
+        # fused=True runs the whole update in one kernel -- worthwhile here
+        # because PEFT leaves ~150 small tensors (LoRA pairs, CDC convs, head).
+        # CUDA-only; CPU runs fall back to the default (foreach) path.
+        use_fused = bool(oc.get("fused", False)) and all(p.is_cuda for p in params)
         optimizer = torch.optim.Adam(
             params,
             lr=oc.lr,
             betas=(oc.beta1, oc.beta2),
             weight_decay=oc.weight_decay,
+            fused=use_fused,
         )
 
         sc = self.cfg.scheduler

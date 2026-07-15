@@ -35,10 +35,18 @@ class Siglip2Backbone(nn.Module):
         freeze: If True, all backbone parameters start frozen (default). PEFT
             modules injected afterwards re-enable gradients only for themselves.
         pretrained: If True, load pre-trained weights from ``model_name``. If
-            False, build a randomly-initialised vision tower from
-            ``config_overrides`` (used for fast, offline unit tests).
+            False, build an *untrained* vision tower with the real
+            architecture of ``model_name`` (config only, no weight download --
+            used to reconstruct a model before loading a checkpoint's own
+            state_dict, see ``OSDFDLightningModule.load_for_inference``), or
+            with ``config_overrides`` when given (a tiny model for fast,
+            offline unit tests, unrelated to ``model_name``).
         config_overrides: ``SiglipVisionConfig`` kwargs for the non-pretrained
-            path (e.g. a tiny model for testing).
+            path (e.g. a tiny model for testing). When ``None``, the real
+            ``model_name`` config is fetched (metadata only, no weights).
+        attn_implementation: Attention kernel selection forwarded to
+            transformers (``"eager"`` | ``"sdpa"`` | ``"flash_attention_2"``).
+            ``None`` keeps the HF default (SDPA on torch >= 2.1.1).
     """
 
     def __init__(
@@ -47,17 +55,26 @@ class Siglip2Backbone(nn.Module):
         freeze: bool = True,
         pretrained: bool = True,
         config_overrides: dict | None = None,
+        attn_implementation: str | None = None,
     ) -> None:
         super().__init__()
         if pretrained:
             # Fixed-resolution SigLIP 2 checkpoints load via the SigLIP v1
             # classes (backward compatible); AutoModel returns the full model.
-            full = AutoModel.from_pretrained(model_name)
+            kwargs = {"attn_implementation": attn_implementation} if attn_implementation else {}
+            full = AutoModel.from_pretrained(model_name, **kwargs)
             self.vision_model = full.vision_model
         else:
-            from transformers import SiglipVisionConfig, SiglipVisionModel
+            from transformers import AutoConfig, SiglipVisionConfig, SiglipVisionModel
 
-            cfg = SiglipVisionConfig(**(config_overrides or {}))
+            if config_overrides:
+                cfg = SiglipVisionConfig(**config_overrides)
+            else:
+                # Real architecture, config only (a few KB, cached after the
+                # first pretrained=True load) -- no weight download.
+                cfg = AutoConfig.from_pretrained(model_name).vision_config
+            if attn_implementation:
+                cfg._attn_implementation = attn_implementation
             self.vision_model = SiglipVisionModel(cfg).vision_model
         self.hidden_size = self.vision_model.config.hidden_size
 

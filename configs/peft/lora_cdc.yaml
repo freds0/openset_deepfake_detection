@@ -1,4 +1,6 @@
 # Forgery-aware PEFT: LoRA on attention Q/K/V + CDC adapter in the FFN.
+start_layer: 0                # first encoder block to adapt; 0 = all (paper).
+                              # >0 truncates backward at that block (fewer FLOPs, ablation)
 lora:
   enabled: true
   r: 8                        # rank (paper default for ViT-B, d=768)

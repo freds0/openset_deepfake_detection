@@ -57,7 +57,8 @@ def compute_metrics(
         threshold: Decision threshold for the count-based metrics.
 
     Returns:
-        Dict with ``acc``, ``auc``, ``f1``, ``ap``, ``eer``, ``fpr``, ``fnr``.
+        Dict with ``acc``, ``auc``, ``f1``, ``ap``, ``eer``, ``eer_threshold``,
+        ``fpr``, ``fnr``.
     """
     labels = np.asarray(labels).astype(int)
     scores = np.asarray(scores).astype(float)
@@ -69,11 +70,12 @@ def compute_metrics(
     if len(np.unique(labels)) > 1:
         metrics["auc"] = float(roc_auc_score(labels, scores))
         metrics["ap"] = float(average_precision_score(labels, scores))
-        metrics["eer"], _ = equal_error_rate(labels, scores)
+        metrics["eer"], metrics["eer_threshold"] = equal_error_rate(labels, scores)
     else:  # pragma: no cover - single-class edge case
         metrics["auc"] = float("nan")
         metrics["ap"] = float("nan")
         metrics["eer"] = float("nan")
+        metrics["eer_threshold"] = float("nan")
     metrics["f1"] = float(f1_score(labels, preds, zero_division=0))
 
     tn, fp, fn, tp = confusion_matrix(labels, preds, labels=[0, 1]).ravel()

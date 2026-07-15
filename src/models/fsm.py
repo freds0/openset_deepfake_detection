@@ -54,17 +54,33 @@ class ForgeryStyleMixture(nn.Module):
         prob: Probability of activating FSM on a given training forward pass.
         alpha: Both parameters of the ``Beta(alpha, alpha)`` mixing prior.
         eps: Numerical stabiliser for the standard deviation.
+        single_domain_fallback: Behaviour when a batch's fake samples span a
+            single forgery domain (e.g. datasets with no per-generator domain
+            labels, such as NTIRE). ``"random"`` pairs fakes with a uniformly
+            random other fake (MixStyle-style, cited as [73]); ``"off"``
+            reproduces the original no-op behaviour (identity permutation).
     """
 
-    def __init__(self, prob: float = 0.5, alpha: float = 0.1, eps: float = 1e-6) -> None:
+    def __init__(
+        self,
+        prob: float = 0.5,
+        alpha: float = 0.1,
+        eps: float = 1e-6,
+        single_domain_fallback: str = "random",
+    ) -> None:
         super().__init__()
+        if single_domain_fallback not in ("random", "off"):
+            raise ValueError(f"Unknown single_domain_fallback: {single_domain_fallback}")
         self.prob = prob
         self.eps = eps
+        self.single_domain_fallback = single_domain_fallback
         # Beta(alpha, alpha) prior on the mixing weight delta (Eqs. 7-8).
         self.beta = torch.distributions.Beta(alpha, alpha)
+        # Whether the previous forward pass actually mixed statistics (for
+        # monitoring -- FSM can silently become a no-op, e.g. single-domain data).
+        self.last_fired = False
 
-    @staticmethod
-    def _domain_shuffle(domains: torch.Tensor) -> torch.Tensor:
+    def _domain_shuffle(self, domains: torch.Tensor) -> torch.Tensor:
         """Pair every fake sample with a fake sample of a *different* domain.
 
         Args:
@@ -74,19 +90,29 @@ class ForgeryStyleMixture(nn.Module):
         Returns:
             A permutation index tensor ``perm`` of shape ``(F,)`` such that
             ``domains[perm[i]] != domains[i]`` wherever the constraint is
-            satisfiable. If fewer than two distinct domains are present the
-            identity is returned (mixing is a no-op).
+            satisfiable. If fewer than two distinct domains are present, falls
+            back per :attr:`single_domain_fallback` (random pairing, or the
+            identity permutation which makes mixing a no-op).
         """
         f = domains.numel()
-        perm = torch.arange(f, device=domains.device)
         if torch.unique(domains).numel() < 2:
-            return perm
-        for i in range(f):
-            # Candidate partners come from a different forgery domain.
-            candidates = (domains != domains[i]).nonzero(as_tuple=True)[0]
-            j = candidates[torch.randint(len(candidates), (1,), device=domains.device)]
-            perm[i] = j
-        return perm
+            if self.single_domain_fallback == "off":
+                return torch.arange(f, device=domains.device)
+            # MixStyle-style: pair with a random other fake sample. Occasional
+            # fixed points (self-pairing) are harmless -- that row is just
+            # skipped by the mixing.
+            return torch.randperm(f, device=domains.device)
+        # Vectorised uniform sampling among different-domain candidates (no
+        # Python loop): diff[i, j] is True iff sample j is a valid partner
+        # for sample i (different domain).
+        diff = domains.unsqueeze(0) != domains.unsqueeze(1)  # (F, F)
+        no_cand = ~diff.any(dim=1)  # rows with no valid partner (shouldn't
+        # happen given the >=2-domains guard above, but degenerate to
+        # self-pairing rather than crash on torch.multinomial's all-zero row).
+        weights = diff.float()
+        idx = torch.arange(f, device=domains.device)
+        weights[no_cand, idx[no_cand]] = 1.0
+        return torch.multinomial(weights, 1).squeeze(1)
 
     def forward(
         self,
@@ -107,6 +133,7 @@ class ForgeryStyleMixture(nn.Module):
             samples and the token ordering are preserved. During ``eval`` or
             when the Bernoulli(prob) draw fails the input is returned unchanged.
         """
+        self.last_fired = False
         if not self.training or self.prob <= 0.0:
             return tokens
         if torch.rand(1).item() >= self.prob:
@@ -137,4 +164,5 @@ class ForgeryStyleMixture(nn.Module):
         # Restore original index order: scatter the mixed fake features back.
         out = tokens.clone()
         out[fake_idx] = mixed.to(tokens.dtype)
+        self.last_fired = True
         return out

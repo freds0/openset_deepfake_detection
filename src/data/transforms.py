@@ -89,6 +89,7 @@ def build_transform(
     image_size: int = 224,
     train: bool = False,
     augmentation: dict | None = None,
+    resize_mode: str = "squash",
 ) -> T.Compose:
     """Build a SigLIP 2 preprocessing pipeline, optionally with augmentation.
 
@@ -99,16 +100,27 @@ def build_transform(
             applied when ``train`` is True and ``augmentation['enabled']`` is
             True; otherwise a plain resize + normalise pipeline is returned
             (paper-faithful default).
+        resize_mode: ``"squash"`` (default) resizes directly to
+            ``(image_size, image_size)``, matching the SigLIP preprocessor and
+            ignoring aspect ratio. ``"crop"`` instead uses a
+            ``RandomResizedCrop`` at train time and a shorter-side resize +
+            center crop at val/test time -- preserves aspect ratio, at the
+            cost of not seeing the full frame. Ignored when the augmentation
+            pipeline's own ``random_resized_crop`` is active (train only) to
+            avoid stacking two crops.
 
     Returns:
         A ``torchvision`` transform mapping a PIL image to a normalised tensor.
     """
+    if resize_mode not in ("squash", "crop"):
+        raise ValueError(f"Unknown resize_mode: {resize_mode}")
     aug = _merge_aug(augmentation)
     use_aug = train and aug["enabled"]
 
     ops: list = []
 
-    # Spatial resize (or random resized crop when augmenting).
+    # Spatial resize. The augmentation pipeline's own RandomResizedCrop (train
+    # only, when enabled) wins over `resize_mode` so the two never stack.
     if use_aug and aug["random_resized_crop"]:
         ops.append(
             T.RandomResizedCrop(
@@ -117,6 +129,17 @@ def build_transform(
                 interpolation=T.InterpolationMode.BICUBIC,
             )
         )
+    elif resize_mode == "crop" and train:
+        ops.append(
+            T.RandomResizedCrop(
+                image_size,
+                scale=tuple(aug["rrc_scale"]),
+                interpolation=T.InterpolationMode.BICUBIC,
+            )
+        )
+    elif resize_mode == "crop":
+        ops.append(T.Resize(image_size, interpolation=T.InterpolationMode.BICUBIC))
+        ops.append(T.CenterCrop(image_size))
     else:
         ops.append(
             T.Resize((image_size, image_size), interpolation=T.InterpolationMode.BICUBIC)

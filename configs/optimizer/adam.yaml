@@ -4,3 +4,6 @@ lr: 3.0e-5
 beta1: 0.9
 beta2: 0.999
 weight_decay: 0.0
+fused: false                 # measured ~0% gain (update is tiny vs. fwd/bwd) AND Lightning's
+                             # AMP plugin rejects fused + gradient_clip_val; only usable with
+                             # trainer.gradient_clip_val=null or precision=32-true

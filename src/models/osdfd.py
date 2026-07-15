@@ -40,14 +40,20 @@ class OSDFDModel(nn.Module):
         model_name: SigLIP 2 checkpoint id.
         lora: LoRA config (``None`` disables LoRA).
         cdc: CDC-adapter config (``None`` disables the adapter).
+        peft_start_layer: First encoder block to adapt (see
+            :func:`~src.models.peft_inject.inject_peft`); 0 = all (paper).
         fsm_prob: FSM activation probability (``0`` disables FSM).
         fsm_alpha: ``Beta(alpha, alpha)`` parameter for FSM mixing.
+        fsm_single_domain_fallback: FSM behaviour when a batch's fakes span a
+            single forgery domain (see :class:`~src.models.fsm.ForgeryStyleMixture`).
         feature_fusion: ``"global"`` (MAP pooled only) or ``"global_local"``
             (concatenate MAP pooled with mean-pooled patch tokens).
         head_hidden_dim: Width of the classifier's penultimate (SCL) layer.
         head_dropout: Dropout in the classifier head.
         freeze_backbone: Freeze SigLIP 2 weights (paper default: True).
         train_norm: Also train LayerNorm affine params (optional).
+        train_pool_head: Also train the backbone's MAP pooling head (optional;
+            Fase 2 ablation).
     """
 
     def __init__(
@@ -55,15 +61,19 @@ class OSDFDModel(nn.Module):
         model_name: str = "google/siglip2-base-patch16-224",
         lora: LoRAConfig | None = None,
         cdc: CDCConfig | None = None,
+        peft_start_layer: int = 0,
         fsm_prob: float = 0.5,
         fsm_alpha: float = 0.1,
+        fsm_single_domain_fallback: str = "random",
         feature_fusion: str = "global",
         head_hidden_dim: int = 256,
         head_dropout: float = 0.0,
         freeze_backbone: bool = True,
         train_norm: bool = False,
+        train_pool_head: bool = False,
         pretrained: bool = True,
         backbone_config_overrides: dict | None = None,
+        attn_implementation: str | None = None,
     ) -> None:
         super().__init__()
         if feature_fusion not in ("global", "global_local"):
@@ -76,17 +86,22 @@ class OSDFDModel(nn.Module):
             freeze=freeze_backbone,
             pretrained=pretrained,
             config_overrides=backbone_config_overrides,
+            attn_implementation=attn_implementation,
         )
-        inject_peft(self.backbone, lora=lora, cdc=cdc)
+        inject_peft(self.backbone, lora=lora, cdc=cdc, start_layer=peft_start_layer)
 
-        self.fsm = ForgeryStyleMixture(prob=fsm_prob, alpha=fsm_alpha)
+        self.fsm = ForgeryStyleMixture(
+            prob=fsm_prob,
+            alpha=fsm_alpha,
+            single_domain_fallback=fsm_single_domain_fallback,
+        )
 
         d = self.backbone.hidden_size
         in_dim = d * 2 if feature_fusion == "global_local" else d
         self.head = ClassifierHead(in_dim, hidden_dim=head_hidden_dim, dropout=head_dropout)
 
         if freeze_backbone:
-            mark_trainable(self, train_norm=train_norm)
+            mark_trainable(self, train_norm=train_norm, train_pool_head=train_pool_head)
 
     def forward(
         self,

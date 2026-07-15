@@ -22,6 +22,8 @@ class OSDFDLoss(nn.Module):
     Args:
         scl_weight: Loss weight ``lambda`` on the SCL term (paper default: 1.0).
         scl_margin: Margin of the Single-Center Loss (paper default: 0.01).
+        scl_margin_scale: ``"none"`` | ``"sqrt_dim"`` -- see
+            :class:`~src.losses.single_center_loss.SingleCenterLoss`.
         pos_weight: Optional positive-class weight for BCE (class imbalance).
     """
 
@@ -29,13 +31,14 @@ class OSDFDLoss(nn.Module):
         self,
         scl_weight: float = 1.0,
         scl_margin: float = 0.01,
+        scl_margin_scale: str = "none",
         pos_weight: float | None = None,
     ) -> None:
         super().__init__()
         self.scl_weight = scl_weight
         pw = torch.tensor(pos_weight) if pos_weight is not None else None
         self.bce = nn.BCEWithLogitsLoss(pos_weight=pw)
-        self.scl = SingleCenterLoss(margin=scl_margin)
+        self.scl = SingleCenterLoss(margin=scl_margin, margin_scale=scl_margin_scale)
 
     def forward(
         self,

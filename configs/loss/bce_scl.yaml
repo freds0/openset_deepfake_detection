@@ -1,4 +1,5 @@
 # Objective: L = BCE + scl_weight * SCL   (Eq. 10)
 scl_weight: 1.0              # lambda (paper default: 1.0)
 scl_margin: 0.01            # SCL margin (paper default: 0.01)
+scl_margin_scale: none       # "none" (paper OSDFD) | "sqrt_dim" (SCL original; use scl_margin~0.3)
 pos_weight: null            # optional BCE positive-class weight

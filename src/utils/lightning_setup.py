@@ -18,6 +18,8 @@ from lightning.pytorch.callbacks import (
 from lightning.pytorch.loggers import Logger, TensorBoardLogger, WandbLogger
 from omegaconf import DictConfig, OmegaConf
 
+from .ema import EMACallback
+
 
 def build_loggers(cfg: DictConfig) -> list[Logger]:
     """Build TensorBoard and/or W&B loggers per the ``logger`` config."""
@@ -74,6 +76,9 @@ def build_callbacks(cfg: DictConfig) -> list[L.Callback]:
     if cc.lr_monitor.enabled:
         callbacks.append(LearningRateMonitor(logging_interval="step"))
 
+    if cc.ema.enabled:
+        callbacks.append(EMACallback(decay=cc.ema.decay))
+
     return callbacks
 
 
@@ -93,6 +98,7 @@ def build_trainer(cfg: DictConfig, loggers: list[Logger], callbacks: list[L.Call
         check_val_every_n_epoch=tc.check_val_every_n_epoch,
         log_every_n_steps=tc.log_every_n_steps,
         num_sanity_val_steps=tc.num_sanity_val_steps,
+        benchmark=tc.benchmark,
         deterministic=cfg.deterministic,
         logger=loggers,
         callbacks=callbacks,

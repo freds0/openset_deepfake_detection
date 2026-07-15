@@ -2,3 +2,4 @@
 enabled: true
 prob: 0.5                     # activation probability (MixStyle-style)
 alpha: 0.1                    # Beta(alpha, alpha) mixing prior (Eqs. 7-8)
+single_domain_fallback: random   # "random" (MixStyle entre fakes) | "off" (no-op, comportamento original)

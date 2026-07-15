@@ -22,11 +22,20 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="OSDFD (SigLIP 2) forgery inference")
     p.add_argument("--ckpt", required=True, help="Path to a Lightning .ckpt")
     p.add_argument("--input", required=True, help="Image file or folder of images")
-    p.add_argument("--image-size", type=int, default=224)
+    p.add_argument(
+        "--image-size", type=int, default=None,
+        help="Model input resolution (default: resolved from the checkpoint)",
+    )
     p.add_argument("--device", default=None, help="cuda | cpu (auto by default)")
     p.add_argument("--face-crop", action="store_true", help="Detect+crop face first")
     p.add_argument("--face-backend", default="opencv", choices=["opencv", "retinaface", "dlib"])
     p.add_argument("--csv", default=None, help="Optional CSV output path")
+    p.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Decision threshold (default: use the checkpoint's calibrated EER threshold)",
+    )
     return p.parse_args()
 
 
@@ -38,7 +47,10 @@ def main() -> None:
         image_size=args.image_size,
         use_face_crop=args.face_crop,
         face_backend=args.face_backend,
+        threshold=args.threshold,
     )
+    calibrated = " (calibrated)" if args.threshold is None else ""
+    print(f"threshold={predictor.threshold:.4f}{calibrated}")
 
     if os.path.isdir(args.input):
         results = predictor.predict_folder(args.input)

@@ -16,7 +16,8 @@ defaults:
 
 # Global settings
 seed: 0
-deterministic: true
+deterministic: warn     # warn (not error) on ops with no deterministic kernel;
+                         # for bit-exact repro use deterministic=true trainer.benchmark=false
 ckpt_path: null          # resume-from / evaluate checkpoint (null = none)
 # Concrete run directory; set at runtime from Hydra's output dir so no
 # unresolved resolver is baked into saved checkpoints.

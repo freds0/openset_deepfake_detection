@@ -129,19 +129,37 @@ class ForgeryFrameDataset(Dataset):
         records: List of :class:`Record`.
         transform: A callable mapping a PIL image to a tensor.
         face_cropper: Optional :class:`~src.data.face_detection.FaceCropper`.
+        jpeg_draft_size: If set, JPEG images are decoded via ``Image.draft``
+            at the largest DCT scale that still covers this size (2-8x faster
+            decode for large "in the wild" JPEGs, e.g. NTIRE) before the
+            final resize in ``transform``. ``None`` (default) decodes at full
+            resolution -- required for lossless formats like PNG.
     """
 
-    def __init__(self, records: list[Record], transform, face_cropper=None) -> None:
+    def __init__(
+        self,
+        records: list[Record],
+        transform,
+        face_cropper=None,
+        jpeg_draft_size: int | None = None,
+    ) -> None:
         self.records = records
         self.transform = transform
         self.face_cropper = face_cropper
+        self.jpeg_draft_size = jpeg_draft_size
 
     def __len__(self) -> int:
         return len(self.records)
 
     def __getitem__(self, idx: int) -> dict:
         rec = self.records[idx]
-        image = Image.open(rec.path).convert("RGB")
+        image = Image.open(rec.path)
+        if self.jpeg_draft_size and image.format == "JPEG":
+            # Decodes at the largest DCT-scaled factor that still covers the
+            # target size; never upscales, so quality loss is sub-visual once
+            # downstream-resized to a smaller model input.
+            image.draft("RGB", (self.jpeg_draft_size, self.jpeg_draft_size))
+        image = image.convert("RGB")
         if self.face_cropper is not None:
             image = self.face_cropper(image)
         pixel_values = self.transform(image)

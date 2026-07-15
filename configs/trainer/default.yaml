@@ -1,8 +1,13 @@
 # PyTorch Lightning Trainer flags (AMP, DDP, grad accumulation/clipping, ...).
 accelerator: auto
-devices: auto
+devices: 1                   # explicit; multi-GPU is opt-in (see comment below)
 strategy: auto               # set "ddp" for multi-GPU
-precision: 16-mixed          # AMP; use "32-true" to disable
+# Multi-GPU: effective batch = devices * data.batch_size. When scaling devices,
+# scale the LR linearly (e.g. 4 GPUs -> optimizer.lr=1.2e-4) or reduce
+# data.batch_size to keep the effective batch at the reference value (48).
+#   ./scripts/train.sh trainer.devices=4 trainer.strategy=ddp optimizer.lr=1.2e-4
+precision: bf16-mixed        # AMP (bf16, no GradScaler needed); use "32-true" to disable
+benchmark: true               # cuDNN autotune; for bit-exact repro see README
 max_steps: 30000             # paper trains for 30k iterations
 max_epochs: -1               # step-driven; -1 lets max_steps govern
 accumulate_grad_batches: 1
@@ -11,3 +16,7 @@ val_check_interval: 1000     # validate every N steps (AUC is the val metric)
 check_val_every_n_epoch: null
 log_every_n_steps: 50
 num_sanity_val_steps: 2
+compile: false                # torch.compile the model (train.py only).
+                               # KNOWN BROKEN as of torch 2.7/inductor: FSM's
+                               # dynamic control flow raises BackendCompilerFailed.
+                               # See the comment in train.py before enabling.

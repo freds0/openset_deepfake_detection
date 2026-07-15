@@ -17,6 +17,8 @@ clearer real/fake decision boundary. It is computed on the penultimate
 
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -27,11 +29,20 @@ class SingleCenterLoss(nn.Module):
     Args:
         margin: How much farther fake features must lie from the real center
             than the real features (paper default: 0.01).
+        margin_scale: ``"none"`` (default, paper OSDFD) uses ``margin`` as an
+            absolute distance. ``"sqrt_dim"`` (original SCL formulation)
+            scales it by ``sqrt(D)`` so the margin is invariant to the
+            feature dimensionality -- with unnormalised features of moderate
+            dimension, an absolute ``0.01`` margin is negligible next to
+            ``dist_r``/``dist_f``; use ``margin~0.3`` with this mode.
     """
 
-    def __init__(self, margin: float = 0.01) -> None:
+    def __init__(self, margin: float = 0.01, margin_scale: str = "none") -> None:
         super().__init__()
+        if margin_scale not in ("none", "sqrt_dim"):
+            raise ValueError(f"Unknown margin_scale: {margin_scale}")
         self.margin = margin
+        self.margin_scale = margin_scale
 
     def forward(self, features: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute the SCL for a batch.
@@ -64,5 +75,8 @@ class SingleCenterLoss(nn.Module):
         fake_feats = features[fake_mask]
         dist_f = torch.norm(fake_feats - center, dim=1).mean()    # Dist_F (Eq. 12)
 
-        hinge = torch.clamp(dist_r - dist_f + self.margin, min=0.0)
+        margin = self.margin
+        if self.margin_scale == "sqrt_dim":
+            margin = self.margin * math.sqrt(features.size(1))
+        hinge = torch.clamp(dist_r - dist_f + margin, min=0.0)
         return dist_r + hinge                                     # L_SCL (Eq. 11)

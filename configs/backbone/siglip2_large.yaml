@@ -2,3 +2,5 @@
 model_name: google/siglip2-large-patch16-256
 image_size: 256
 freeze: true
+pretrained: true      # false + load_for_inference() reconstructs from ckpt state_dict, no HF download
+attn_implementation: null   # null = HF default (sdpa) | eager | sdpa | flash_attention_2 (needs flash-attn)
