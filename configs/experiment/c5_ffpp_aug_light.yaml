@@ -1,0 +1,18 @@
+# @package _global_
+# C5 — augmentation leve no FF++ (hflip + JPEG leve; não altera a natureza do artefato).
+data:
+  augmentation:
+    enabled: true
+    hflip: 0.5
+    jpeg: 0.3
+    jpeg_quality: [60, 95]
+    color_jitter: 0.0
+    hue: 0.0
+    gaussian_blur: 0.0
+    random_resized_crop: false
+    downscale: 0.0
+    random_erasing: 0.0
+logger:
+  wandb:
+    name: c5_ffpp_aug_light
+    tags: [v0.2, C, c5_ffpp_aug_light]

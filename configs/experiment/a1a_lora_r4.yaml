@@ -1,0 +1,10 @@
+# @package _global_
+# A1a — LoRA rank 4 (alpha=r mantém escala 1.0). Hipótese: r=8 sobredimensionado.
+peft:
+  lora:
+    r: 4
+    alpha: 4.0
+logger:
+  wandb:
+    name: a1a_lora_r4
+    tags: [v0.2, A, a1a_lora_r4]

@@ -1,0 +1,8 @@
+# @package _global_
+# C8b — Beta(0.3,0.3) menos bimodal -> misturas mais intermediárias.
+fsm:
+  alpha: 0.3
+logger:
+  wandb:
+    name: c8b_fsm_alpha03
+    tags: [v0.2, C, c8b_fsm_alpha03]

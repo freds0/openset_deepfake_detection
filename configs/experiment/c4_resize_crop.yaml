@@ -1,0 +1,8 @@
+# @package _global_
+# C4 — resize preservando aspecto (Resize+CenterCrop / RRC), vs. "squash".
+data:
+  resize_mode: crop
+logger:
+  wandb:
+    name: c4_resize_crop
+    tags: [v0.2, C, c4_resize_crop]

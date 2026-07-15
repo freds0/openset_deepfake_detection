@@ -1,0 +1,9 @@
+# @package _global_
+# A2a — CDC theta=1.0 (Eq. 3 pura do artigo, vs. default 0.7 do CDCN).
+peft:
+  cdc:
+    theta: 1.0
+logger:
+  wandb:
+    name: a2a_cdc_theta10
+    tags: [v0.2, A, a2a_cdc_theta10]

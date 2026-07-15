@@ -1,0 +1,10 @@
+# @package _global_
+# E — protocolo leave-one-manipulation-out (open-set / cross-manipulation, Tabelas I-II).
+# Source (train+val): as 3 manipulações restantes + real. Target (test): FaceSwap + real.
+data:
+  train_classes: [real, Deepfakes, Face2Face, NeuralTextures]
+  test_classes: [real, FaceSwap]
+logger:
+  wandb:
+    name: e3_loo_faceswap
+    tags: [v0.2, E, e3_loo_faceswap]

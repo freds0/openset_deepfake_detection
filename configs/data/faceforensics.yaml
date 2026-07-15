@@ -13,6 +13,8 @@ use_face_crop: false         # frames assumed pre-cropped; enable if raw
 face_backend: opencv         # opencv | retinaface | dlib
 face_margin: 1.3             # box enlargement factor (paper Sec. IV-A)
 resize_mode: squash          # "squash" (paper-faithful) | "crop" (aspect-preserving; experiment)
+train_classes: null          # leave-one-manipulation-out: source manipulations (gates train+val); null = all
+test_classes: null           # held-out target manipulation(s) + real for the test split; null = all
 domain_map: null             # optional {subfolder: domain_id} override
 # Advanced, forgery-aware augmentation. DISABLED by default to match the paper
 # ("OSDFD does not employ data augmentations during training"). Set

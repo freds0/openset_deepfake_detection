@@ -1,0 +1,8 @@
+# @package _global_
+# A5a — PEFT só nos blocos 6-11 (AUDIT R6: +44% steps/s, -42% VRAM medidos).
+peft:
+  start_layer: 6
+logger:
+  wandb:
+    name: a5a_start_layer6
+    tags: [v0.2, A, a5a_start_layer6]

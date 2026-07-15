@@ -1,0 +1,6 @@
+# @package _global_
+# A0 — baseline nomeado (config atual, sem overrides). Referência de comparação.
+logger:
+  wandb:
+    name: a0_baseline
+    tags: [v0.2, A, a0_baseline]

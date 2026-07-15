@@ -409,3 +409,69 @@ def test_forgery_frame_dataset_jpeg_draft(tmp_path):
     ds = ForgeryFrameDataset(records, transform=build_transform(32, train=False), jpeg_draft_size=16)
     for i in range(len(ds)):
         assert ds[i]["pixel_values"].shape == (3, 32, 32)
+
+
+def _write_ffpp_tree(root, split, classes, n=2):
+    """Create a tiny FF++-style split tree: <root>/<split>/<class>/*.png."""
+    import os
+
+    for cls in classes:
+        d = os.path.join(root, split, cls)
+        os.makedirs(d, exist_ok=True)
+        for i in range(n):
+            arr = (np.random.RandomState(hash((cls, i)) % 2**32).rand(16, 16, 3) * 255).astype(
+                np.uint8
+            )
+            Image.fromarray(arr).save(os.path.join(d, f"{i}.png"))
+
+
+def test_records_from_faceforensics_class_filter(tmp_path):
+    from src.data.dataset import records_from_faceforensics
+
+    root = str(tmp_path)
+    all_classes = ["real", "Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"]
+    _write_ffpp_tree(root, "train", all_classes)
+
+    # No filter -> every manipulation is present.
+    full = records_from_faceforensics(root, "train")
+    assert {r.domain for r in full} == {0, 1, 2, 3, 4}
+
+    # Source-domain subset (leave-out Deepfakes): DF domain (1) must be absent.
+    src = records_from_faceforensics(
+        root, "train", classes=["real", "Face2Face", "FaceSwap", "NeuralTextures"]
+    )
+    domains = {r.domain for r in src}
+    assert 1 not in domains and domains == {0, 2, 3, 4}
+
+    # An empty match is a configuration error, not a silent no-op.
+    with pytest.raises(ValueError):
+        records_from_faceforensics(root, "train", classes=["does_not_exist"])
+
+
+def test_datamodule_loo_train_test_class_split(tmp_path):
+    from src.data.datamodule import ForgeryDataModule
+
+    root = str(tmp_path)
+    all_classes = ["real", "Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"]
+    for split in ("train", "val", "test"):
+        _write_ffpp_tree(root, split, all_classes)
+
+    dm = ForgeryDataModule(
+        source="faceforensics",
+        root=root,
+        image_size=16,
+        batch_size=4,
+        num_workers=0,
+        real_oversample=1,
+        persistent_workers=False,
+        train_classes=["real", "Face2Face", "FaceSwap", "NeuralTextures"],
+        test_classes=["real", "Deepfakes"],
+    )
+    dm.setup(stage="fit")
+    dm.setup(stage="test")
+
+    # Train + val: source manipulations only (Deepfakes / domain 1 excluded).
+    assert 1 not in {r.domain for r in dm._train.records}
+    assert 1 not in {r.domain for r in dm._val.records}
+    # Test: held-out target manipulation (Deepfakes) + real only.
+    assert {r.domain for r in dm._test.records} == {0, 1}

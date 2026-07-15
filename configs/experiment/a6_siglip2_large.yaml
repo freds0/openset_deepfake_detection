@@ -1,0 +1,13 @@
+# @package _global_
+# A6 — backbone SigLIP 2 large (24 blocos, d=1024, 256px). Caro: ir direto p/ confirmação.
+# batch menor + acumulação p/ manter o batch efetivo em 48.
+defaults:
+  - override /backbone: siglip2_large
+data:
+  batch_size: 24
+trainer:
+  accumulate_grad_batches: 2
+logger:
+  wandb:
+    name: a6_siglip2_large
+    tags: [v0.2, A, a6_siglip2_large]

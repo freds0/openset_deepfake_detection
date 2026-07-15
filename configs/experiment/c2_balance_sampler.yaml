@@ -1,0 +1,9 @@
+# @package _global_
+# C2 — WeightedRandomSampler no lugar da duplicação de reais (balanceio exato/época).
+data:
+  balance_sampler: true
+  real_oversample: 1
+logger:
+  wandb:
+    name: c2_balance_sampler
+    tags: [v0.2, C, c2_balance_sampler]

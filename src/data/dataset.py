@@ -65,6 +65,7 @@ def records_from_faceforensics(
     root: str,
     split: str,
     domain_map: dict[str, int] | None = None,
+    classes: list[str] | None = None,
 ) -> list[Record]:
     """Build records by scanning an FF++-style split folder.
 
@@ -74,11 +75,20 @@ def records_from_faceforensics(
         domain_map: Mapping ``{subfolder_name: domain_id}``; ``"real"`` (or any
             entry mapped to 0) is treated as bona-fide. Defaults to
             :data:`FFPP_DOMAINS`.
+        classes: Optional subset of subfolder names to include (e.g. the source
+            manipulations of a leave-one-manipulation-out split). ``None`` (the
+            default) scans every entry of ``domain_map``. Names not present in
+            ``domain_map`` are ignored.
 
     Returns:
         A list of :class:`Record`.
     """
     domain_map = domain_map or FFPP_DOMAINS
+    if classes is not None:
+        classes = set(classes)
+        domain_map = {k: v for k, v in domain_map.items() if k in classes}
+        if not domain_map:
+            raise ValueError(f"`classes`={sorted(classes)} matched no entry of the domain map")
     split_dir = os.path.join(root, split)
     if not os.path.isdir(split_dir):
         raise FileNotFoundError(f"Split directory not found: {split_dir}")

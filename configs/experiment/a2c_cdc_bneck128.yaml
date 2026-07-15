@@ -1,0 +1,9 @@
+# @package _global_
+# A2c — CDC bottleneck 128 (mais capacidade local; testa se 64 subdimensiona).
+peft:
+  cdc:
+    bottleneck: 128
+logger:
+  wandb:
+    name: a2c_cdc_bneck128
+    tags: [v0.2, A, a2c_cdc_bneck128]

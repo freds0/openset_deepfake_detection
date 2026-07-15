@@ -1,0 +1,9 @@
+# @package _global_
+# A7 — LoRA também na projeção de saída da atenção (+147k params).
+peft:
+  lora:
+    targets: [q_proj, k_proj, v_proj, out_proj]
+logger:
+  wandb:
+    name: a7_lora_oproj
+    tags: [v0.2, A, a7_lora_oproj]

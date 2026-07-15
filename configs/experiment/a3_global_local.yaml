@@ -1,0 +1,8 @@
+# @package _global_
+# A3 — fusão global+local (concat MAP pooled + média dos patch tokens).
+model:
+  feature_fusion: global_local
+logger:
+  wandb:
+    name: a3_global_local
+    tags: [v0.2, A, a3_global_local]

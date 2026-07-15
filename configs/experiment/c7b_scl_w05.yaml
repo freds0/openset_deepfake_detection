@@ -1,0 +1,8 @@
+# @package _global_
+# C7b — peso lambda da SCL = 0.5.
+loss:
+  scl_weight: 0.5
+logger:
+  wandb:
+    name: c7b_scl_w05
+    tags: [v0.2, C, c7b_scl_w05]

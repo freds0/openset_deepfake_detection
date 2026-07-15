@@ -1,0 +1,8 @@
+# @package _global_
+# A5b — PEFT nos blocos 3-11 (meio-termo entre 0 e 6).
+peft:
+  start_layer: 3
+logger:
+  wandb:
+    name: a5b_start_layer3
+    tags: [v0.2, A, a5b_start_layer3]

@@ -1,0 +1,8 @@
+# @package _global_
+# A8a — largura da penúltima FC (feature SCL) = 512.
+model:
+  head_hidden_dim: 512
+logger:
+  wandb:
+    name: a8a_head512
+    tags: [v0.2, A, a8a_head512]

@@ -1,0 +1,8 @@
+# @package _global_
+# C1 — scheduler cosine (o artigo não usa decay; testar com SigLIP 2 + aug).
+defaults:
+  - override /scheduler: cosine
+logger:
+  wandb:
+    name: c1_cosine
+    tags: [v0.2, C, c1_cosine]

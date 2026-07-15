@@ -1,0 +1,8 @@
+# @package _global_
+# A4 — destrava o MAP pooling head do SigLIP 2 (~2,4M params extras).
+model:
+  train_pool_head: true
+logger:
+  wandb:
+    name: a4_train_pool_head
+    tags: [v0.2, A, a4_train_pool_head]

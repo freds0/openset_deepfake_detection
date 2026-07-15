@@ -1,0 +1,8 @@
+# @package _global_
+# C8c — FSM desligado (ablação de controle: quanto o FSM contribui aqui?).
+fsm:
+  prob: 0.0
+logger:
+  wandb:
+    name: c8c_fsm_off
+    tags: [v0.2, C, c8c_fsm_off]

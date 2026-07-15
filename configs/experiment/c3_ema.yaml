@@ -1,0 +1,10 @@
+# @package _global_
+# C3 — EMA dos parâmetros treináveis (decay 0.999).
+callbacks:
+  ema:
+    enabled: true
+    decay: 0.999
+logger:
+  wandb:
+    name: c3_ema
+    tags: [v0.2, C, c3_ema]

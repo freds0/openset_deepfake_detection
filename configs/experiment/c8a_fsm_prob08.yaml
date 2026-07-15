@@ -1,0 +1,8 @@
+# @package _global_
+# C8a — probabilidade de disparo do FSM = 0.8 (vs. 0.5).
+fsm:
+  prob: 0.8
+logger:
+  wandb:
+    name: c8a_fsm_prob08
+    tags: [v0.2, C, c8a_fsm_prob08]

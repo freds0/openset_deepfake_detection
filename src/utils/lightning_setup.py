@@ -37,6 +37,7 @@ def build_loggers(cfg: DictConfig) -> list[Logger]:
             WandbLogger(
                 project=lc.wandb.project,
                 name=lc.wandb.name,
+                tags=list(lc.wandb.tags) if lc.wandb.get("tags", None) else None,
                 offline=lc.wandb.offline,
                 log_model=lc.wandb.log_model,
                 save_dir=lc.wandb.save_dir,

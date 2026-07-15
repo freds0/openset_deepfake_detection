@@ -1,0 +1,14 @@
+# @package _global_
+# C6 — pseudo-domínios k-means (k=4) para o FSM no NTIRE.
+# Pré-requisito: gerar o manifest com
+#   python scripts/assign_pseudo_domains.py --k 4 --out data/ntire_manifest_k4.csv
+defaults:
+  - override /data: ntire
+data:
+  manifest: data/ntire_manifest_k4.csv
+fsm:
+  single_domain_fallback: "off"   # exige domínios reais; monitorar train/fsm_fired
+logger:
+  wandb:
+    name: c6_ntire_k4
+    tags: [v0.2, C, c6_ntire_k4]

@@ -1,0 +1,9 @@
+# @package _global_
+# C7a — margem SCL relativa a sqrt(D) (ativa a hinge; margem absoluta 0.01 é desprezível).
+loss:
+  scl_margin: 0.3
+  scl_margin_scale: sqrt_dim
+logger:
+  wandb:
+    name: c7a_scl_sqrtdim
+    tags: [v0.2, C, c7a_scl_sqrtdim]

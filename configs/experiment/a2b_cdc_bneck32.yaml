@@ -1,0 +1,9 @@
+# @package _global_
+# A2b — CDC bottleneck 32 (~metade dos params do adapter; aproxima 1,34M do artigo).
+peft:
+  cdc:
+    bottleneck: 32
+logger:
+  wandb:
+    name: a2b_cdc_bneck32
+    tags: [v0.2, A, a2b_cdc_bneck32]

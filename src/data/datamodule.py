@@ -51,6 +51,14 @@ class ForgeryDataModule(L.LightningDataModule):
         jpeg_draft_size: Fast approximate JPEG decode target size (see
             :class:`~src.data.dataset.ForgeryFrameDataset`); ``None`` (default)
             decodes at full resolution.
+        train_classes: Optional subset of manipulation subfolders (folder mode
+            only) used as the *source* domains -- restricts both the train and
+            the val splits. Used for the leave-one-manipulation-out (open-set /
+            cross-manipulation) protocol of the OSDFD paper (Tables I-II), where
+            val must contain only the seen manipulations. ``None`` = all.
+        test_classes: Optional subset of manipulation subfolders for the *test*
+            split -- the held-out target manipulation(s) plus ``real``. ``None``
+            = all. Both flags are ignored in manifest mode (no subfolders).
         domain_map: Optional ``{subfolder: domain_id}`` override (folder mode).
         pin_memory: Pin dataloader memory.
         persistent_workers: Keep workers alive between epochs.
@@ -75,6 +83,8 @@ class ForgeryDataModule(L.LightningDataModule):
         augmentation: dict | None = None,
         resize_mode: str = "squash",
         jpeg_draft_size: int | None = None,
+        train_classes: list[str] | None = None,
+        test_classes: list[str] | None = None,
         domain_map: dict[str, int] | None = None,
         pin_memory: bool = True,
         persistent_workers: bool = True,
@@ -92,12 +102,14 @@ class ForgeryDataModule(L.LightningDataModule):
         self._test: ForgeryFrameDataset | None = None
         self._train_sampler: WeightedRandomSampler | None = None
 
-    def _load_records(self, split: str) -> list[Record]:
+    def _load_records(self, split: str, classes: list[str] | None = None) -> list[Record]:
         h = self.hparams
         if h.source == "faceforensics":
             if h.root is None:
                 raise ValueError("`root` is required for source='faceforensics'")
-            return records_from_faceforensics(h.root, split, domain_map=h.domain_map)
+            return records_from_faceforensics(
+                h.root, split, domain_map=h.domain_map, classes=classes
+            )
         if h.source == "manifest":
             if h.manifest is None:
                 raise ValueError("`manifest` is required for source='manifest'")
@@ -114,9 +126,12 @@ class ForgeryDataModule(L.LightningDataModule):
         h = self.hparams
         cropper = self._cropper()
 
+        # Source manipulations (train_classes) gate both train and val so that
+        # validation stays open-set (no target manipulation leakage); the
+        # held-out target manipulation lives in test (test_classes).
         if stage in (None, "fit"):
             if h.balance_sampler:
-                train_records = self._load_records("train")
+                train_records = self._load_records("train", classes=h.train_classes)
                 labels = np.array([r.label for r in train_records])
                 class_counts = np.bincount(labels)
                 weights = 1.0 / class_counts[labels]
@@ -126,7 +141,9 @@ class ForgeryDataModule(L.LightningDataModule):
                     replacement=True,
                 )
             else:
-                train_records = oversample_real(self._load_records("train"), h.real_oversample)
+                train_records = oversample_real(
+                    self._load_records("train", classes=h.train_classes), h.real_oversample
+                )
                 self._train_sampler = None
             self._train = ForgeryFrameDataset(
                 train_records,
@@ -137,21 +154,21 @@ class ForgeryDataModule(L.LightningDataModule):
                 jpeg_draft_size=h.jpeg_draft_size,
             )
             self._val = ForgeryFrameDataset(
-                self._load_records("val"),
+                self._load_records("val", classes=h.train_classes),
                 transform=build_transform(h.image_size, train=False, resize_mode=h.resize_mode),
                 face_cropper=cropper,
                 jpeg_draft_size=h.jpeg_draft_size,
             )
         if stage in ("test", "predict") or stage is None:
             self._test = ForgeryFrameDataset(
-                self._load_records("test"),
+                self._load_records("test", classes=h.test_classes),
                 transform=build_transform(h.image_size, train=False, resize_mode=h.resize_mode),
                 face_cropper=cropper,
                 jpeg_draft_size=h.jpeg_draft_size,
             )
         if stage == "validate" and self._val is None:
             self._val = ForgeryFrameDataset(
-                self._load_records("val"),
+                self._load_records("val", classes=h.train_classes),
                 transform=build_transform(h.image_size, train=False, resize_mode=h.resize_mode),
                 face_cropper=cropper,
                 jpeg_draft_size=h.jpeg_draft_size,

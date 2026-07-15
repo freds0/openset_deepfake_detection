@@ -1,0 +1,8 @@
+# @package _global_
+# A8b — dropout 0.1 na cabeça (regularização; combinar com augmentation).
+model:
+  head_dropout: 0.1
+logger:
+  wandb:
+    name: a8b_head_dropout
+    tags: [v0.2, A, a8b_head_dropout]
